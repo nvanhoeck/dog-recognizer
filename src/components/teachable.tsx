@@ -1,49 +1,60 @@
+import { ChangeEvent, useEffect, useState } from "react";
+
+import styles from './teachable.module.css';
+
 export const Teachable = () => {
-    const URL = './model/';
+    const modelLocation = './model/';
     let model: any, webcam: any, labelContainer: any, maxPredictions: any;
+    const [image, setImage] = useState<File | null>(null);
+
+    useEffect(() => {
+        if (image != null) {
+            init().then(() => predict())
+        }
+    }, [image])
 
     const init = async () => {
-        const modelURL = URL + "model.json";
-        const metadataURL = URL + "metadata.json";
+        const modelURL = modelLocation + 'model.json';
+        const metadataURL = modelLocation + 'metadata.json';
         const ww: any = window
 
         // load the model and metadata
-        // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
-        // or files from your local hard drive
-        // Note: the pose library adds "tmImage" object to your window (window.tmImage)
         model = await ww.tmImage.load(modelURL, metadataURL);
         maxPredictions = model.getTotalClasses();
 
-        // Convenience function to setup a webcam
-        const flip = true; // whether to flip the webcam
-        webcam = new ww.tmImage.Webcam(200, 200, flip); // width, height, flip
-        await webcam.setup(); // request access to the webcam
-        await webcam.play();
-        window.requestAnimationFrame(loop);
-
-        // append elements to the DOM
-        document.getElementById("webcam-container")?.appendChild(webcam.canvas);
-        labelContainer = document.getElementById("label-container");
-        for (let i = 0; i < maxPredictions; i++) { // and class labels
-            labelContainer.appendChild(document.createElement("div"));
-        }
-    }
-
-    const loop = async () => {
-        webcam.update(); // update the webcam frame
-        await predict();
-        window.requestAnimationFrame(loop);
-    }
-
-    // run the webcam image through the image model
-    const predict = async () => {
-        // predict can take in an image, video or canvas html element
-        const prediction = await model.predict(webcam.canvas);
+        labelContainer = document.getElementById('label-container');
         for (let i = 0; i < maxPredictions; i++) {
-            const classPrediction =
-                prediction[i].className + ": " + prediction[i].probability.toFixed(2);
-            labelContainer.childNodes[i].innerHTML = classPrediction;
+            // and class labels
+            labelContainer.appendChild(document.createElement('div'));
         }
+    }
+
+    const predict = async () => {
+        // Create an HTMLImageElement from the uploaded file
+        const imageElement = document.createElement('img');
+        imageElement.style.height = '300px'
+        imageElement.style.width = '300px'
+        const imagePreview = document.getElementById('imagePreview')
+        if (imagePreview && imagePreview.childElementCount > 0) {
+            imagePreview?.removeChild(imagePreview.firstChild!)
+        }
+        imageElement.src = URL.createObjectURL(image!);
+        imageElement.onload = async () => {
+            // predict can take in an image, video or canvas html element
+            const prediction = await model.predict(imageElement, false);
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ': ' + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+        };
+        imagePreview?.appendChild(imageElement)
+    }
+
+    const onFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
+        const file: File | null = event.target.files && event.target.files[0];
+        console.log(file)
+        setImage(file)
     }
 
     return (
@@ -51,7 +62,8 @@ export const Teachable = () => {
             <div>Teachable Machine Image Model</div>
             <div id="webcam-container"></div>
             <div id="label-container"></div>
-            <button type="button" onClick={() => init()}>Start</button>
+            <div id="imagePreview" className={styles.imagePreview} />
+            <input id="imageUpload" type="file" onChange={onFileUpload} />
         </>
     )
 }
